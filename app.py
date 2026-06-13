@@ -773,15 +773,19 @@ def render_shelf():
             sort_by = st.selectbox(
                 "排序",
                 options=[("added", "最近添加"), ("progress", "按进度"), ("title", "按书名")],
-                format_func=lambda x: dict(added="最近添加", progress="按进度", title="按书名")[x],
-                index=["added", "progress", "title"].index(st.session_state.sort_by),
+                format_func=lambda x: x[1],
+                index=["added", "progress", "title"].index(
+                    st.session_state.get("sort_by_val", "added")
+                ),
                 key="sort_select",
             )
+            st.session_state.sort_by_val = sort_by[0]
             st.session_state.sort_by = sort_by
 
-        if sort_by == "progress":
+        sort_key = st.session_state.get("sort_by_val", "added")
+        if sort_key == "progress":
             books.sort(key=lambda b: b.get("progress_pct", 0), reverse=True)
-        elif sort_by == "title":
+        elif sort_key == "title":
             books.sort(key=lambda b: b.get("title", ""))
         # added 已经是默认倒序
 
