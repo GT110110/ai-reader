@@ -28,7 +28,7 @@ if "%1"=="" (
 
 if "%1"=="all" (
     echo [1/2] 上传所有文件...
-    scp -i "%PEM%" app.py shelf.py reader.py book_parser.py prompt.py notes.py reading_log.py requirements.txt .env %HOST%:%APP_DIR%/
+    scp -i "%PEM%" app.py styles.py shelf.py reader.py book_parser.py prompt.py notes.py reading_log.py requirements.txt .env %HOST%:%APP_DIR%/
     echo [2/2] 重启服务...
     ssh -i "%PEM%" %HOST% "systemctl restart ai-reader"
     echo 完成！

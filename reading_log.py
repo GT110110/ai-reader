@@ -10,6 +10,8 @@ import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import streamlit as st
+
 SHELF_DIR = Path(__file__).parent / "shelf"
 
 
@@ -77,6 +79,7 @@ def _fmt_duration(seconds: float) -> str:
     return f"{s}s"
 
 
+@st.cache_data(ttl=3, show_spinner=False)
 def get_reading_duration(book_id: str) -> dict:
     """某本书的阅读时长统计
 
@@ -122,6 +125,7 @@ def get_reading_duration(book_id: str) -> dict:
     }
 
 
+@st.cache_data(ttl=5, show_spinner=False)
 def get_total_duration() -> dict:
     """全站阅读时长统计"""
     total_sec = 0.0
@@ -163,6 +167,7 @@ def get_total_duration() -> dict:
     }
 
 
+@st.cache_data(ttl=3, show_spinner=False)
 def get_reading_stats() -> dict:
     """全局阅读统计（动作计数 + 时长 + 本周章节）"""
     now = datetime.now()
@@ -215,10 +220,7 @@ def get_reading_stats() -> dict:
         "chapters_read": chapters_read,
         "notes_taken": notes_taken,
         "weekly_chapters": weekly_chapters,
-        "weekly_chapters_in_progress": sum(
-            1
-            for _ in []
-        ),  # 占位，保持向后兼容
+        "weekly_chapters_in_progress": 0,  # 保留向后兼容
         "total_sec": total_sec,
         "total_fmt": _fmt_duration(total_sec),
         "weekly_sec": weekly_sec,
@@ -271,6 +273,7 @@ def get_book_stats(book_id: str) -> dict:
     }
 
 
+@st.cache_data(ttl=5, show_spinner=False)
 def get_weekly_chart_data(book_id: str = None) -> list:
     """最近 7 天每天的阅读时长（秒），用于条形图
 

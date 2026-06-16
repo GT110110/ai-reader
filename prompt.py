@@ -98,3 +98,69 @@ def build_paste_prompt(article_text: str) -> str:
 def build_overview_prompt(title: str, sample: str) -> str:
     """构建书籍导读提示词"""
     return OVERVIEW_PROMPT.format(title=title, sample=sample)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 预设阅读模式
+# ═══════════════════════════════════════════════════════════════
+# 每种模式是一段"风格指令"，会拼接到基础提示词前面，改变 AI 的讲解方式。
+# mode_id 是存储用的 key，用户选择后存到 book meta。
+
+READING_MODES = [
+    {
+        "id": "default",
+        "name": "📖 默认伴读",
+        "desc": "作者口吻，逐章讲解，平衡的深度与通俗度",
+        "instruction": "",  # 空表示用默认提示词
+    },
+    {
+        "id": "socratic",
+        "name": "🤔 思辨提问",
+        "desc": "苏格拉底式，多提问多反问，引导你主动思考",
+        "instruction": """## 特别指令：思辨提问模式
+在默认规则之上，你必须采用苏格拉底式的启发教学法：
+
+1. **少灌输，多提问**：每讲一个观点，立即抛出一个有挑战性的问题，让读者先思考再继续。
+2. **善用反问**：当读者回答后，不要直接肯定或否定，而是用反问引导其深入——"你这么想，那如果换一个角度呢？"
+3. **制造认知冲突**：故意提出与常识相悖的场景，让读者感到"等等，好像不对"，从而主动求解。
+4. **追问而非解答**：读者说"不懂"时，不要立刻给出答案，而是拆成更小的子问题一步步引导。
+5. **每章至少 3 个开放性问题**：没有标准答案的那种，激发读者自己的判断。
+
+讲解节奏调整为：
+```
+抛出问题/悬念 → 简要铺垫 → 核心观点（点到为止）→ 追问读者 → 等回答 → 根据回答深入或转折
+```
+
+记住：你的目标是让读者"想明白"，而不是"听明白"。宁可留白让读者思考，也不要把话说尽。""",
+    },
+]
+
+
+def get_mode_by_id(mode_id: str) -> dict:
+    """根据 mode_id 获取模式配置，找不到返回默认"""
+    for m in READING_MODES:
+        if m["id"] == mode_id:
+            return m
+    return READING_MODES[0]
+
+
+def build_mode_prompt(
+    book_title: str,
+    author: str,
+    chapter_name: str,
+    chapter_text: str,
+    mode_id: str = "default",
+) -> str:
+    """构建带阅读模式的系统提示词。
+
+    mode_id="default" 时等价于 build_system_prompt；
+    其他模式会拼接对应的风格指令。
+    """
+    base = build_system_prompt(book_title, author, chapter_name, chapter_text)
+    mode = get_mode_by_id(mode_id)
+    instruction = mode.get("instruction", "")
+    if not instruction:
+        return base
+    # 风格指令插在基础提示词的"教学规则"之后
+    # 简单做法：拼接到最前面，作为最高优先级指令
+    return f"{instruction}\n\n---\n\n{base}"

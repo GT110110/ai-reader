@@ -37,7 +37,7 @@ from shelf import (
     get_book_chapter_stats,
 )
 from reader import start_chapter, continue_chat, start_article
-from prompt import build_overview_prompt
+from prompt import build_overview_prompt, READING_MODES
 from notes import (
     save_note,
     load_note,
@@ -54,6 +54,7 @@ from reading_log import (
     get_total_duration,
     get_weekly_chart_data,
 )
+from styles import get_css
 
 load_dotenv()
 
@@ -68,406 +69,7 @@ st.set_page_config(
 )
 
 
-# ═══════════════════════════════════════════════════════════════
-# 设计系统 —— CSS（浅/深双主题，现代极简）
-# ═══════════════════════════════════════════════════════════════
-def get_css() -> str:
-    return """
-<style>
-/* ── 字体 ── */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700;800&family=Noto+Serif+SC:wght@500;700&display=swap');
-
-/* ── 主题变量：浅色（默认）── */
-:root {
-    --bg: #FFFFFF;
-    --bg-subtle: #FAFAFA;
-    --card: #FFFFFF;
-    --text: #111827;
-    --text-secondary: #6B7280;
-    --text-tertiary: #9CA3AF;
-    --border: #ECECEC;
-    --border-strong: #E5E5E5;
-    --accent: #C8893E;
-    --accent-soft: #FDF6EC;
-    --green: #16A34A;
-    --green-soft: #ECFDF5;
-    --hover: #F7F7F7;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.03);
-    --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
-    --spine-1: #C8893E;
-    --spine-2: #5B7553;
-    --spine-3: #8B5A3C;
-    --spine-4: #6B7B8C;
-}
-
-/* ── 主题变量：深色 ── */
-:root[data-theme="dark"] {
-    --bg: #0F0F10;
-    --bg-subtle: #161618;
-    --card: #1A1A1D;
-    --text: #E8E8E8;
-    --text-secondary: #A0A0A0;
-    --text-tertiary: #6B6B6B;
-    --border: #2A2A2D;
-    --border-strong: #333337;
-    --accent: #D4A056;
-    --accent-soft: #2A2018;
-    --green: #4ADE80;
-    --green-soft: #16261C;
-    --hover: #222225;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-    --shadow-md: 0 4px 16px rgba(0,0,0,0.4);
-    --spine-1: #D4A056;
-    --spine-2: #7A9270;
-    --spine-3: #B07A52;
-    --spine-4: #8B9BAC;
-}
-
-/* ── 全局 ── */
-html, body, .stApp {
-    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    transition: background 0.25s ease, color 0.25s ease;
-}
-.main .block-container {
-    padding: 1.5rem 2rem 4rem;
-    max-width: 1200px;
-}
-#MainMenu, footer, .stDeployButton, header[data-testid="stHeader"] { display: none !important; }
-
-h1, h2, h3, h4 {
-    font-family: 'Noto Sans SC', sans-serif !important;
-    letter-spacing: -0.01em;
-    color: var(--text) !important;
-}
-h1 { font-size: 1.65rem !important; font-weight: 700 !important; }
-h2 { font-size: 1.2rem !important; font-weight: 600 !important; }
-h3 { font-size: 1rem !important; font-weight: 600 !important; }
-p, span, div, li { color: var(--text); }
-
-/* ── 隐藏 Streamlit 警告横幅的边框，让它更克制 ── */
-.stAlert { border-radius: 10px !important; }
-
-/* ── 顶部 Header ── */
-.app-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0.5rem 0 1.5rem;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 1.5rem;
-}
-.app-header .brand {
-    display: flex; align-items: center; gap: 0.7rem;
-}
-.app-header .logo {
-    width: 36px; height: 36px;
-    background: var(--text);
-    color: var(--bg);
-    border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 1.1rem;
-}
-.app-header .brand-name {
-    font-weight: 700; font-size: 1.15rem; color: var(--text);
-}
-.app-header .brand-sub {
-    font-size: 0.78rem; color: var(--text-tertiary); margin-top: 1px;
-}
-.app-header .header-actions {
-    display: flex; align-items: center; gap: 0.5rem;
-}
-.theme-btn {
-    width: 36px; height: 36px; border-radius: 10px;
-    background: var(--bg-subtle); border: 1px solid var(--border);
-    cursor: pointer; font-size: 1.1rem; line-height: 1;
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.15s;
-}
-.theme-btn:hover { background: var(--hover); transform: translateY(-1px); }
-
-/* ── 统计条 ── */
-.stats-bar {
-    display: flex; gap: 0; margin-bottom: 1.5rem;
-    background: var(--bg-subtle); border-radius: 12px; padding: 0.9rem 1.2rem;
-}
-.stat-item {
-    flex: 1; text-align: center;
-    border-right: 1px solid var(--border);
-}
-.stat-item:last-child { border-right: none; }
-.stat-value {
-    font-size: 1.4rem; font-weight: 700; color: var(--text);
-    line-height: 1.1;
-}
-.stat-label {
-    font-size: 0.72rem; color: var(--text-tertiary); margin-top: 4px;
-    letter-spacing: 0.02em;
-}
-
-/* ── 书卡 ── */
-.book-card {
-    background: var(--card); border-radius: 14px; padding: 1.2rem 1.2rem 1rem 1.4rem;
-    box-shadow: var(--shadow-sm); transition: all 0.2s;
-    position: relative; overflow: hidden;
-    display: flex; flex-direction: column; min-height: 180px;
-    margin-bottom: 0.8rem;
-}
-.book-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
-.book-card .spine {
-    position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
-}
-.book-card .book-title {
-    font-weight: 600; font-size: 1rem; color: var(--text); line-height: 1.35;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-    overflow: hidden; flex-grow: 1;
-}
-.book-card .book-author {
-    font-size: 0.8rem; color: var(--text-tertiary); margin: 0.3rem 0 0.8rem;
-}
-.book-card .progress-row {
-    display: flex; align-items: center; gap: 0.5rem; margin-top: auto;
-}
-.book-card .progress-track {
-    flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;
-}
-.book-card .progress-fill {
-    height: 100%; border-radius: 2px; transition: width 0.5s; background: var(--accent);
-}
-.book-card .progress-pct {
-    font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);
-    min-width: 32px; text-align: right;
-}
-.book-card .card-meta {
-    display: flex; justify-content: space-between;
-    font-size: 0.7rem; color: var(--text-tertiary); margin-top: 0.5rem;
-}
-
-/* ── 空状态 ── */
-.empty-state {
-    text-align: center; padding: 4rem 2rem;
-}
-.empty-state .empty-icon {
-    font-size: 3rem; margin-bottom: 1rem; opacity: 0.6;
-}
-.empty-state h2 {
-    font-size: 1.4rem !important; font-weight: 700; margin-bottom: 0.5rem;
-}
-.empty-state p {
-    color: var(--text-tertiary); font-size: 0.95rem;
-}
-
-/* ── 章节统计胶囊 ── */
-.chapter-stats {
-    display: flex; gap: 0.5rem; flex-wrap: wrap;
-    margin: 0.8rem 0;
-}
-.stat-pill {
-    background: var(--bg-subtle); border-radius: 20px;
-    padding: 0.3rem 0.8rem; font-size: 0.78rem;
-    color: var(--text-secondary);
-    display: inline-flex; align-items: center; gap: 0.3rem;
-}
-.stat-pill .pill-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-}
-.stat-pill.reading .pill-dot { background: var(--accent); }
-.stat-pill.done .pill-dot { background: var(--green); }
-.stat-pill.bookmark .pill-dot { background: #EAB308; }
-
-/* ── 章节行 ── */
-.chapter-row {
-    background: var(--card); border-radius: 10px; padding: 0.8rem 1rem;
-    margin-bottom: 0.4rem; transition: all 0.15s;
-    display: flex; align-items: center; gap: 0.7rem;
-}
-.chapter-row:hover { background: var(--hover); }
-.chapter-row.reading { background: var(--accent-soft); }
-.chapter-row .ch-status-dot {
-    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-    border: 2px solid var(--border-strong);
-}
-.chapter-row.unread .ch-status-dot { background: transparent; }
-.chapter-row.reading .ch-status-dot { background: var(--accent); border-color: var(--accent); }
-.chapter-row.completed .ch-status-dot { background: var(--green); border-color: var(--green); }
-.chapter-row .ch-info { flex: 1; min-width: 0; }
-.chapter-row .ch-name {
-    font-weight: 500; font-size: 0.92rem; color: var(--text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.chapter-row .ch-summary {
-    font-size: 0.76rem; color: var(--text-tertiary); margin-top: 2px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.chapter-row .ch-meta-right {
-    display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;
-}
-.chapter-row .ch-note-tag {
-    font-size: 0.68rem; color: var(--text-tertiary);
-    background: var(--bg-subtle); padding: 0.15rem 0.5rem; border-radius: 4px;
-}
-
-/* ── 导读框 ── */
-.overview-box {
-    background: var(--bg-subtle); border-radius: 12px; padding: 1.2rem 1.4rem;
-    margin: 1rem 0; line-height: 1.85; font-size: 0.93rem; color: var(--text-secondary);
-    border-left: 3px solid var(--accent);
-}
-
-/* ── 周阅读图表 ── */
-.weekly-chart {
-    display: flex; align-items: flex-end; gap: 6px;
-    height: 80px; padding: 0.5rem 0;
-}
-.weekly-bar-col {
-    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
-}
-.weekly-bar {
-    width: 100%; max-width: 32px;
-    background: var(--accent); border-radius: 4px 4px 0 0;
-    min-height: 2px; transition: height 0.4s;
-    opacity: 0.85;
-}
-.weekly-bar-col:hover .weekly-bar { opacity: 1; }
-.weekly-bar-label {
-    font-size: 0.65rem; color: var(--text-tertiary);
-}
-
-/* ── 按钮统一样式 ── */
-.stButton > button {
-    border-radius: 10px !important;
-    font-family: 'Noto Sans SC', sans-serif !important;
-    font-weight: 500 !important;
-    font-size: 0.87rem !important;
-    transition: all 0.15s !important;
-    border: 1px solid var(--border-strong) !important;
-    background: var(--card) !important;
-    color: var(--text) !important;
-}
-.stButton > button:hover {
-    background: var(--hover) !important;
-    border-color: var(--text-tertiary) !important;
-    transform: translateY(-1px);
-}
-.stButton > button[kind="primary"] {
-    background: var(--text) !important;
-    color: var(--bg) !important;
-    border-color: var(--text) !important;
-}
-.stButton > button[kind="primary"]:hover {
-    background: var(--text-secondary) !important;
-    border-color: var(--text-secondary) !important;
-}
-
-/* ── 下载按钮 ── */
-.stDownloadButton > button {
-    border-radius: 10px !important;
-    font-family: 'Noto Sans SC', sans-serif !important;
-    font-weight: 500 !important;
-    font-size: 0.85rem !important;
-}
-
-/* ── 聊天 ── */
-.stChatMessage {
-    border-radius: 14px !important;
-    padding: 1rem 1.2rem !important;
-    background: var(--card) !important;
-    border: 1px solid var(--border) !important;
-}
-.stChatMessage > div:first-child {
-    background: var(--text) !important;
-}
-.stChatInput > div {
-    border: 1px solid var(--border-strong) !important;
-    border-radius: 12px !important;
-    background: var(--card) !important;
-}
-.stChatInput > div:focus-within {
-    border-color: var(--accent) !important;
-}
-
-/* ── 输入框 ── */
-.stTextInput > div > input,
-.stTextArea > div > textarea {
-    background: var(--card) !important;
-    color: var(--text) !important;
-    border-color: var(--border-strong) !important;
-    border-radius: 10px !important;
-    font-family: 'Noto Sans SC', sans-serif !important;
-}
-.stTextInput > div > input:focus,
-.stTextArea > div > textarea:focus {
-    border-color: var(--accent) !important;
-    box-shadow: none !important;
-}
-
-/* ── expander ── */
-.streamlit-expanderHeader {
-    background: var(--card) !important;
-    font-size: 0.9rem !important;
-}
-details {
-    border: 1px solid var(--border) !important;
-    border-radius: 10px !important;
-    background: var(--card) !important;
-}
-
-/* ── sidebar ── */
-[data-testid="stSidebar"] {
-    background: var(--bg-subtle) !important;
-    border-right: 1px solid var(--border);
-}
-[data-testid="stSidebar"] .stButton > button {
-    background: transparent !important;
-    border: 1px solid var(--border-strong) !important;
-}
-
-/* ── 金句卡片 ── */
-.quote-card {
-    background: var(--card); border-radius: 10px; padding: 1rem 1.1rem;
-    margin-bottom: 0.6rem; border-left: 3px solid var(--accent);
-    position: relative;
-}
-.quote-card .quote-text {
-    font-size: 0.92rem; line-height: 1.7; color: var(--text);
-    font-family: 'Noto Serif SC', serif;
-}
-.quote-card .quote-meta {
-    font-size: 0.72rem; color: var(--text-tertiary); margin-top: 0.5rem;
-}
-
-/* ── divider ── */
-hr {
-    border-color: var(--border) !important;
-    margin: 1.5rem 0 !important;
-}
-
-/* ── 进度环数字（reading 页右上） ── */
-.progress-display {
-    text-align: right;
-}
-.progress-display .pct {
-    font-size: 1.5rem; font-weight: 700; color: var(--text); line-height: 1;
-}
-.progress-display .label {
-    font-size: 0.68rem; color: var(--text-tertiary); letter-spacing: 0.05em;
-}
-
-/* ── 底部工具栏 ── */
-.toolbar {
-    display: flex; gap: 0.5rem; padding: 0.8rem 0;
-    background: var(--bg-subtle); border-radius: 12px; padding: 0.6rem;
-    margin-top: 1rem;
-}
-.toolbar .tool-btn {
-    flex: 1; padding: 0.5rem; text-align: center;
-    background: var(--card); border-radius: 8px; font-size: 0.85rem;
-    cursor: pointer; transition: all 0.15s;
-}
-.toolbar .tool-btn:hover { background: var(--hover); }
-</style>
-"""
-
-
+# CSS 从 styles.py 导入（见文件顶部 import）
 # ═══════════════════════════════════════════════════════════════
 # 主题管理
 # ═══════════════════════════════════════════════════════════════
@@ -538,9 +140,112 @@ apply_theme()
 
 
 # ═══════════════════════════════════════════════════════════════
-# API key
+# 头像取值（防御性：永远返回 Streamlit 能渲染的合法头像）
 # ═══════════════════════════════════════════════════════════════
-if not os.getenv("DEEPSEEK_API_KEY"):
+# 关键：Streamlit 的 chat_message(avatar=...) 只接受三种值：
+#   1. 单个 emoji（如 "📖"）
+#   2. 已注册的 icon 名（如 ":material/person:"）
+#   3. 图片（PIL Image / BytesIO / URL / 本地路径）
+# 中文字符（"王"）和字母（"A"）都不是 emoji，会被当 URL 加载 → 报错！
+# 所以我们用 PIL 动态生成首字头像 PNG，永远安全。
+_AVATAR_CACHE = {}  # 缓存生成的头像，避免重复渲染
+
+
+def _safe_avatar(author: str | None):
+    """生成作者头像。
+
+    返回 PIL Image（首字+背景色），永远可被 Streamlit 渲染。
+    作者名空时返回 📖 emoji。
+    """
+    import re
+    # 取作者名首个"正经字符"
+    if not author:
+        return "📖"
+    m = re.search(r"\w", author)
+    if not m:
+        return "📖"
+    char = m.group()
+
+    # 缓存命中
+    if char in _AVATAR_CACHE:
+        return _AVATAR_CACHE[char]
+
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+        import hashlib
+
+        # 用字符生成稳定的背景色（深色，白字可见）
+        hue = int(hashlib.md5(char.encode()).hexdigest()[:2], 16)
+        bg = _hsl_to_rgb(hue % 360, 0.45, 0.38)
+
+        size = 128
+        img = Image.new("RGB", (size, size), tuple(bg))
+        draw = ImageDraw.Draw(img)
+
+        # 找一个能渲染中文的字体
+        font = _find_cjk_font(size)
+        if font:
+            # 测量并居中
+            try:
+                bbox = draw.textbbox((0, 0), char, font=font)
+                w = bbox[2] - bbox[0]
+                h = bbox[3] - bbox[1]
+                x = (size - w) / 2 - bbox[0]
+                y = (size - h) / 2 - bbox[1]
+            except Exception:
+                x, y = size / 2 - 30, size / 2 - 50
+            draw.text((x, y), char, fill="white", font=font)
+        else:
+            # 无中文字体，画 emoji 兜底
+            return "📖"
+
+        _AVATAR_CACHE[char] = img
+        return img
+    except Exception:
+        return "📖"
+
+
+def _hsl_to_rgb(h: float, s: float, l: float) -> tuple:
+    """HSL 转 RGB（h: 0-360, s/l: 0-1）"""
+    import colorsys
+    r, g, b = colorsys.hls_to_rgb(h / 360, l, s)
+    return (int(r * 255), int(g * 255), int(b * 255))
+
+
+def _find_cjk_font(size: int):
+    """找一个能渲染中文的系统字体"""
+    from PIL import ImageFont
+    import os
+    # 常见中文字体路径（Linux/macOS/Windows）
+    candidates = [
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+        "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
+        "/System/Library/Fonts/PingFang.ttc",
+        "C:/Windows/Fonts/msyh.ttc",
+        "C:/Windows/Fonts/simhei.ttf",
+    ]
+    for path in candidates:
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size=72)
+            except Exception:
+                continue
+    return None
+
+
+# ═══════════════════════════════════════════════════════════════
+# API key（优先 Streamlit Secrets，兼容本地 .env）
+# ═══════════════════════════════════════════════════════════════
+def _get_api_key() -> str | None:
+    try:
+        return st.secrets["DEEPSEEK_API_KEY"]
+    except Exception:
+        return os.getenv("DEEPSEEK_API_KEY")
+
+if not _get_api_key():
     with st.sidebar:
         st.warning("⚠️ 未配置 API Key")
         key_in = st.text_input("DeepSeek API Key", type="password")
@@ -571,7 +276,6 @@ def render_app_header(show_back: bool = False, back_label: str = "返回"):
                         <div>
                             <div class="brand-name">阅伴</div>
                             <div class="brand-sub">AI 陪你读懂每一本好书</div>
-                            <div class="brand-sub">好书共读 · 逐章伴读</div>
                         </div>
                     </div>
                 </div>
@@ -600,6 +304,37 @@ def render_stats_bar(items: list):
     st.markdown(f'<div class="stats-bar">{cells}</div>', unsafe_allow_html=True)
 
 
+def progress_ring_svg(pct: int, size: str = "sm", label: str = "") -> str:
+    """生成环形进度 SVG HTML。
+
+    pct: 0-100
+    size: "sm"（书卡，48px）或 "lg"（阅读页，72px）
+    label: 环下方的小标签
+    """
+    import math
+    if size == "lg":
+        dim, stroke = 72, 6
+    else:
+        dim, stroke = 48, 4
+    radius = (dim - stroke) / 2 - 1
+    circumference = 2 * math.pi * radius
+    # pct 映射到 dashoffset
+    offset = circumference * (1 - max(0, min(100, pct)) / 100)
+    text_size = dim * 0.28
+    label_html = f'<span class="ring-label">{label}</span>' if label else ''
+    return f"""
+    <div class="progress-ring {size}" style="width:{dim}px;height:{dim}px;">
+        <svg width="{dim}" height="{dim}">
+            <circle class="ring-bg" cx="{dim/2}" cy="{dim/2}" r="{radius}" stroke-width="{stroke}"/>
+            <circle class="ring-fill" cx="{dim/2}" cy="{dim/2}" r="{radius}" stroke-width="{stroke}"
+                stroke-dasharray="{circumference:.2f}" stroke-dashoffset="{offset:.2f}"/>
+        </svg>
+        <span class="ring-text" style="font-size:{text_size}px;">{pct}%</span>
+        {label_html}
+    </div>
+    """
+
+
 def get_overview(book_id: str, book_title: str, chapters: list) -> str:
     """获取或生成书籍导读（持久化）"""
     overview_path = SHELF_DIR / book_id / "overview.txt"
@@ -611,11 +346,8 @@ def get_overview(book_id: str, book_title: str, chapters: list) -> str:
         sample = "\n\n".join(
             f"《{ch['name']}》: {ch['text'][:500]}" for ch in chapters[:10]
         )
-        from openai import OpenAI
-        client = OpenAI(
-            api_key=os.getenv("DEEPSEEK_API_KEY"),
-            base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
-        )
+        from reader import _get_client
+        client = _get_client()
         resp = client.chat.completions.create(
             model="deepseek-chat",
             messages=[{"role": "user", "content": build_overview_prompt(book_title, sample[:5000])}],
@@ -722,6 +454,13 @@ def render_shelf():
             (dur["total_fmt"], "累计时长"),
         ])
 
+    # 统计页入口（统计条右侧）
+    stat_btn_col, _ = st.columns([1, 5])
+    with stat_btn_col:
+        if st.button("📊 阅读统计", key="goto_stats", use_container_width=True):
+            st.session_state.current_view = "stats"
+            st.rerun()
+
     # 空状态
     if not books:
         st.markdown("""
@@ -770,19 +509,20 @@ def render_shelf():
     if books:
         s_col, _ = st.columns([1, 4])
         with s_col:
-            sort_by = st.selectbox(
+            sort_options = ["最近添加", "按进度", "按书名"]
+            current = st.session_state.get("sort_by", "added")
+            default_idx = {"added": 0, "progress": 1, "title": 2}.get(current, 0)
+            sort_label = st.selectbox(
                 "排序",
-                options=[("added", "最近添加"), ("progress", "按进度"), ("title", "按书名")],
-                format_func=lambda x: x[1],
-                index=["added", "progress", "title"].index(
-                    st.session_state.get("sort_by_val", "added")
-                ),
+                options=sort_options,
+                index=default_idx,
                 key="sort_select",
             )
-            st.session_state.sort_by_val = sort_by[0]
-            st.session_state.sort_by = sort_by
+            # 把显示标签映射回内部 key
+            label_to_key = {"最近添加": "added", "按进度": "progress", "按书名": "title"}
+            st.session_state.sort_by = label_to_key[sort_label]
 
-        sort_key = st.session_state.get("sort_by_val", "added")
+        sort_key = st.session_state.sort_by
         if sort_key == "progress":
             books.sort(key=lambda b: b.get("progress_pct", 0), reverse=True)
         elif sort_key == "title":
@@ -873,12 +613,12 @@ def render_toc():
         """, unsafe_allow_html=True)
     with c2:
         pct = book.get("progress_pct", 0)
-        st.markdown(f"""
-        <div class="progress-display">
-            <div class="pct">{pct}%</div>
-            <div class="label">已读</div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="display:flex;justify-content:flex-end;padding-top:0.3rem;">'
+            f'{progress_ring_svg(pct, size="lg", label="已读")}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     # 章节状态统计胶囊
     cs = get_book_chapter_stats(book_id)
@@ -891,9 +631,10 @@ def render_toc():
     </div>
     """, unsafe_allow_html=True)
 
-    # 继续阅读
+    # 继续阅读（基于上次阅读位置，而非进度百分比，避免进度=0时不显示）
     last_ch = book.get("current_chapter", 0)
-    if book.get("progress_pct", 0) > 0 and last_ch < len(chapters):
+    has_history = bool(book.get("last_read_at")) or book.get("progress_pct", 0) > 0
+    if has_history and last_ch < len(chapters):
         if st.button(
             f"📍 从第 {last_ch + 1} 章继续：{chapters[last_ch]['name']}",
             type="primary",
@@ -924,10 +665,13 @@ def render_toc():
             st.session_state.show_quotes_view = True
             st.rerun()
 
-    # 导读
-    with st.spinner(""):  # 占位，避免 spinner 闪烁
-        pass
-    overview = get_overview(book_id, book['title'], chapters)
+    # 导读（首次访问时自动生成并缓存）
+    overview_path = SHELF_DIR / book_id / "overview.txt"
+    if overview_path.exists():
+        overview = get_overview(book_id, book['title'], chapters)
+    else:
+        with st.spinner("✍️ AI 正在撰写本书导读..."):
+            overview = get_overview(book_id, book['title'], chapters)
     if overview:
         st.markdown(
             f'<div class="overview-box">{overview.replace(chr(10), "<br>")}</div>',
@@ -969,6 +713,36 @@ def render_toc():
             st.success("已保存")
             time.sleep(0.5)
             st.rerun()
+
+        st.divider()
+
+        # 阅读模式（预设风格，普通用户免写 prompt）
+        st.caption("**阅读模式**：选择 AI 的讲解风格")
+        current_mode = book.get("reading_mode", "default")
+        mode_names = [m["name"] for m in READING_MODES]
+        mode_ids = [m["id"] for m in READING_MODES]
+        try:
+            default_idx = mode_ids.index(current_mode)
+        except ValueError:
+            default_idx = 0
+        selected = st.selectbox(
+            "模式",
+            options=mode_names,
+            index=default_idx,
+            format_func=lambda x: x,
+            key=f"mode_select_{book_id}",
+        )
+        selected_id = mode_ids[mode_names.index(selected)]
+        # 显示模式描述
+        selected_mode = next(m for m in READING_MODES if m["id"] == selected_id)
+        st.caption(f"_{selected_mode['desc']}_")
+        if selected_id != current_mode:
+            if st.button("💾 应用此模式", key=f"save_mode_{book_id}", type="primary",
+                         use_container_width=True):
+                update_book_meta(book_id, "reading_mode", selected_id)
+                st.success("已应用")
+                time.sleep(0.5)
+                st.rerun()
 
         st.divider()
 
@@ -1125,7 +899,7 @@ def _render_chapter_rows(book_id: str, items: list, note_indices: set):
         status = ch.get("status", "unread")
         status_class = status if status in ("reading", "completed") else "unread"
         name = ch.get("name", f"第{i+1}章")
-        summary = ch.get("summary", "") or ch["text"][:80].replace("\n", " ").strip()
+        summary = ch.get("summary", "") or ch.get("text", "")[:80].replace("\n", " ").strip()
         bookmarked = ch.get("bookmarked", False)
 
         note_tag = '📝' if i in note_indices else ''
@@ -1263,18 +1037,18 @@ def render_reading():
         </div>
         """, unsafe_allow_html=True)
     with h3:
-        st.markdown(f"""
-        <div class="progress-display">
-            <div class="pct">{pct}%</div>
-            <div class="label">全书进度</div>
-        </div>
-        """, unsafe_allow_html=True)
+        pct = book.get("progress_pct", 0)
+        st.markdown(
+            f'<div style="display:flex;justify-content:flex-end;">'
+            f'{progress_ring_svg(pct, size="lg", label="全书进度")}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     st.markdown("<div style='height:1rem;'></div>", unsafe_allow_html=True)
 
-    # AI 头像：首字母
-    author = book.get("author", "")
-    author_avatar = author[:1] if author else "📖"
+    # AI 头像：作者名首字（防御性，避免空字符串报错）
+    author_avatar = _safe_avatar(book.get("author", ""))
 
     # 渲染历史消息
     messages = st.session_state.messages
@@ -1325,6 +1099,7 @@ def render_reading():
                             chapter["text"],
                             on_token=on_tok,
                             custom_prompt=get_custom_prompt(book_id),
+                            mode_id=book.get("reading_mode", "default"),
                         )
                         ph.markdown(result)
                         st.session_state.messages.append({"role": "assistant", "content": result})
@@ -1539,6 +1314,104 @@ def render_paste():
 
 
 # ═══════════════════════════════════════════════════════════════
+# VIEW: 阅读统计
+# ═══════════════════════════════════════════════════════════════
+def render_stats():
+    """阅读统计页：总览卡片 + 周时长图 + 各书进度"""
+    if render_app_header(show_back=True, back_label="书架"):
+        switch_to_shelf()
+        return
+
+    st.markdown("""
+    <h1>📊 阅读统计</h1>
+    <p style="color:var(--text-tertiary);margin-top:-0.5rem;">你的阅读足迹一目了然</p>
+    """, unsafe_allow_html=True)
+
+    # ── 总览卡片 ──
+    stats = get_reading_stats()
+    dur = get_total_duration()
+    bs = get_bookshelf_stats()
+    total_notes = sum(len(get_all_notes(b["id"])) for b in load_shelf())
+    total_quotes = sum(len(get_quotes(b["id"])) for b in load_shelf())
+
+    cards = "".join(f"""
+    <div class="stat-card">
+        <div class="sc-icon">{icon}</div>
+        <div class="sc-value">{value}</div>
+        <div class="sc-label">{label}</div>
+    </div>
+    """ for icon, value, label in [
+        ("📚", bs["total_books"], "书架"),
+        ("📖", stats["chapters_read"], "已读章节"),
+        ("⏱️", dur["total_fmt"], "累计时长"),
+        ("📝", total_notes, "笔记"),
+        ("💎", total_quotes, "金句"),
+        ("📅", stats["weekly_chapters"], "本周章节"),
+    ])
+    st.markdown(f'<div class="stats-grid">{cards}</div>', unsafe_allow_html=True)
+
+    st.divider()
+
+    # ── 本周阅读时长条形图 ──
+    st.markdown("##### 📅 本周阅读时长")
+    weekly = get_weekly_chart_data()
+    max_sec = max((d["sec"] for d in weekly), default=1) or 1
+
+    def _fmt_m(sec):
+        m = int(sec / 60)
+        if m >= 60:
+            return f"{m//60}h{m%60}m"
+        return f"{m}m" if m > 0 else "—"
+
+    bars = ""
+    for d in weekly:
+        h_pct = (d["sec"] / max_sec * 100) if max_sec > 0 else 0
+        bars += f"""
+        <div class="wb-col">
+            <div class="wb-bar" style="height:{max(h_pct, 2)}%;">
+                <span class="wb-bar-tip">{_fmt_m(d['sec'])}</span>
+            </div>
+            <span class="wb-label">{d['weekday']}</span>
+        </div>
+        """
+    st.markdown(f'<div class="weekly-bars">{bars}</div>', unsafe_allow_html=True)
+
+    st.divider()
+
+    # ── 各书进度 ──
+    st.markdown("##### 📚 书籍进度")
+    books = load_shelf()
+    if not books:
+        st.info("书架还空着，添加一本书开始阅读吧。")
+        return
+
+    for b in books:
+        pct = b.get("progress_pct", 0)
+        ch_count = b.get("chapter_count", 0)
+        cs = get_book_chapter_stats(b["id"])
+        b_dur = get_reading_duration(b["id"])
+        last = b.get("last_read_at", "")
+        last_str = f"上次：{last[5:]}" if last else "未开始"
+
+        st.markdown(f"""
+        <div class="book-stat-row">
+            <div class="bsr-info">
+                <div class="bsr-title">{b['title']}</div>
+                <div class="bsr-meta">{ch_count} 章 · 完成 {cs['completed']}/{cs['total']} · 时长 {b_dur['total_fmt']} · {last_str}</div>
+            </div>
+            <div class="bsr-track"><div class="bsr-fill" style="width:{pct}%;"></div></div>
+            <span class="bsr-pct">{pct}%</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # 点击进入
+        sc1, _ = st.columns([1, 5])
+        with sc1:
+            if st.button("打开", key=f"stat_open_{b['id']}", use_container_width=True):
+                switch_to_toc(b["id"])
+
+
+# ═══════════════════════════════════════════════════════════════
 # 路由分发
 # ═══════════════════════════════════════════════════════════════
 view = st.session_state.current_view
@@ -1550,3 +1423,5 @@ elif view == "reading":
     render_reading()
 elif view == "paste":
     render_paste()
+elif view == "stats":
+    render_stats()

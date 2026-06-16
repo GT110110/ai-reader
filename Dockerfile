@@ -10,7 +10,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py shelf.py reader.py book_parser.py prompt.py notes.py reading_log.py ./
+COPY app.py styles.py shelf.py reader.py book_parser.py prompt.py notes.py reading_log.py ./
 
 RUN mkdir -p shelf
 

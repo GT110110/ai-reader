@@ -6,6 +6,9 @@ import uuid
 import shutil
 from datetime import datetime
 from pathlib import Path
+
+import streamlit as st
+
 from book_parser import parse_file
 
 SHELF_DIR = Path(__file__).parent / "shelf"
@@ -42,6 +45,7 @@ def _save_index(books: list):
         json.dump(books, f, ensure_ascii=False, indent=2)
 
 
+@st.cache_data(ttl=2, show_spinner=False)
 def load_shelf() -> list:
     """获取书架所有书（按添加时间倒序）"""
     books = _load_index()
@@ -307,6 +311,7 @@ def _search_author_photo(author: str, book_title: str) -> str:
     return ""
 
 
+@st.cache_data(ttl=3, show_spinner=False)
 def get_bookshelf_stats() -> dict:
     """书架统计（含每本书的章节完成数）"""
     books = _load_index()
@@ -321,6 +326,7 @@ def get_bookshelf_stats() -> dict:
     }
 
 
+@st.cache_data(ttl=2, show_spinner=False)
 def get_book_chapter_stats(book_id: str) -> dict:
     """某本书的章节状态统计：完成数 / 在读数 / 书签数"""
     chapters = load_chapters_with_state(book_id)

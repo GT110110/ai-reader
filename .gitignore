@@ -2,6 +2,3 @@
 shelf/
 __pycache__/
 *.pyc
-shelf/
-.env
-__pycache__/
